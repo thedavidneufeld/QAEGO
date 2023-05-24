@@ -136,92 +136,134 @@ class NRPF:
             print('Not a solve method, set to default (classical)')
 
     def NR(self, olddata:PowerData, ep):
-            self._reset_values
-            # Make a copy of the old data to retain its data
-            data = copy.deepcopy(olddata)
-            self._load_powerdata(data)
-            # Value calculations
-            self._create_GA_LA(data)
-            self._create_Ybus(data)
-            self._init_unknown()
-            total_iterations = 0 # Total iterations of NR
-            iterations = 0 # Iterations since limit check last failed
-            # Perform NR method iteratively
-            # Stop condition handled within the loop
-            while(True):
-                self._compute_powers(data)
-                # If limit check fails, treat ith PV bus as PQ bus and recompute powers
-                if not self._check_limits(data):
-                    iterations = 0
-                    self._compute_powers(data)
-                self._compute_power_mismatches(data)
-                self._compute_Jacobian(data)
-                self._compute_increment(ep)
-                self._compute_new_PAV(data)
-                total_iterations += 1
-                iterations += 1
-                if self.solve_method == 'hhl':
-                    # Compare HHL with Classical Method
-                    print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(self.Delta_PA_classic - self.Delta_PA), "\n")
-                    print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(self.Delta_V_classic - self.Delta_V), "\n")
-                # If convergence has been reached, exit loop
-                if self._check_convergence(data, ep):
-                    break
-                self.V = self.V_new
-                self.PA = self.PA_new
-            self._load_values(data, olddata)
-            self._calculate_injected(data)
+        # Make a copy of the old data to retain its data
+        data = copy.deepcopy(olddata)
+        P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
+        # Value calculations
+        GA, LA = self._create_GA_LA(data)
+        Y, G, B = self._create_Ybus(data, GA, LA)
+        self._init_unknown(V)
+        total_iterations = 0 # Total iterations of NR
+        iterations = 0 # Iterations since limit check last failed
+        # Perform NR method iteratively
+        # Stop condition handled within the loop
+        while(True):
+            P_new, Q_new = self._compute_powers(data, V, PA, G, B)
+            # If limit check fails, treat ith PV bus as PQ bus and recompute powers
+            while(not self._check_limits(data, V, Q_new, Q_min, Q_max)):
+                iterations = 0
+                P_new, Q_new = self._compute_powers(data, V, PA, G, B)
+            Delta_P, Delta_Q = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
+            Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
+            Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
+            PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_V, Delta_PA)
+            total_iterations += 1
+            iterations += 1
+            if self.solve_method == 'hhl':
+                # Compare HHL with Classical Method
+                print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PA_classic - Delta_PA), "\n")
+                print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_V_classic - Delta_V), "\n")
+            # If convergence has been reached, exit loop
+            if self._check_convergence(Delta_PAV, ep):
+                break
+            V = V_new
+            PA = PA_new
+        self._load_values(data, olddata, V_new, PA_new)
 
-            # Print Data
-            print("\nTotal nmber of iterations: ", total_iterations)
-            print("Iterations since last limit check failure: ", iterations)
-            print("\nOld Voltages:\n", olddata.buses[:,3])
-            print("\nNew Voltages:\n", data.buses[:,3])    
-            print("\nOld Phase Angles:\n", olddata.buses[:,4])
-            print("\nNew Phase Angles:\n", data.buses[:,4])
-            print("\nOld Bus Values:\n", olddata.buses, "\n")
-            print("New Bus Values (after NR):\n", data.buses, "\n")
-            print("Old Gen Values:\n", olddata.gens, "\n")
-            print("New Gen Values (after NR):\n", data.gens, "\n")
+        # Print Data
+        print("\nTotal nmber of iterations: ", total_iterations)
+        print("Iterations since last limit check failure: ", iterations)
+        print("\nOld Voltages:\n", olddata.buses[:,3])
+        print("\nNew Voltages:\n", data.buses[:,3])    
+        print("\nOld Phase Angles:\n", olddata.buses[:,4])
+        print("\nNew Phase Angles:\n", data.buses[:,4])
+        print("\nOld Bus Values:\n", olddata.buses, "\n")
+        print("New Bus Values (after NR):\n", data.buses, "\n")
+        print("Old Gen Values:\n", olddata.gens, "\n")
+        print("New Gen Values (after NR):\n", data.gens, "\n")
 
-            # Return new data with updated values
-            return data
+        # Return new data with updated values
+        return data
     
-    def _reset_values(self):
-        self.P = None
-        self.Q = None
-        self.V = None
-        self.PA = None
-        self.Q_min = None
-        self.Q_max = None
-        self.LA = None
-        self.GA = None
-        self.Y = None
-        self.G = None
-        self.B = None
-        self.P_new = None
-        self.Q_new = None
-        self.Delta_P = None
-        self.Delta_Q = None
-        self.Delta_PQ = None
-        self.Delta_PAV = None
-        self.Delta_PA = None
-        self.Delta_PA_classic = None
-        self.Delta_V = None
-        self.Delta_V_classic = None
-        self.PA_new = None
-        self.V_new = None
+    def NR_PC(self, olddata:PowerData, ep):
+        # Make a copy of the old data to retain its data
+        data = copy.deepcopy(olddata)
+        P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
+        # Value calculations
+        GA, LA = self._create_GA_LA(data)
+        Y, G, B = self._create_Ybus(data, GA, LA)
+        self._init_unknown(V)
+        total_iterations = 0 # Total iterations of NR
+        iterations = 0 # Iterations since limit check last failed
+        P_new, Q_new = self._compute_powers(data, V, PA, G, B)
+        # If limit check fails, treat ith PV bus as PQ bus and recompute powers
+        while(not self._check_limits(data, V, Q_new, Q_min, Q_max)):
+            iterations = 0
+            P_new, Q_new = self._compute_powers(data, V, Q_new, Q_min, Q_max)
+        Delta_P, Delta_Q = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
+        Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
+        Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
+        PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_V, Delta_PA)
+        total_iterations += 1
+        iterations += 1
+        if self.solve_method == 'hhl':
+            # Compare HHL with Classical Method
+            print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PA_classic - Delta_PA), "\n")
+            print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_V_classic - Delta_V), "\n")
+        # If convergence has been reached, skip loop
+        # Perform NR_PC method iteratively
+        while(not self._check_convergence(Delta_PAV, ep)):
+            V = V_new
+            PA = PA_new
+            P_new, Q_new = self._compute_powers(data, V, PA, G, B)
+            # If limit check fails, treat ith PV bus as PQ bus and recompute powers
+            while(not self._check_limits(data, V, Q_new, Q_min, Q_max)):
+                iterations = 0
+                P_new, Q_new = self._compute_powers(data)
+            Delta_P, Delta_Q = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
+            # Predicted values
+            Delta_PAV_pred, Delta_PA_pred, Delta_V_pred, x, y = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
+            PA_pred, V_pred = self._compute_new_PAV(data, V, PA, Delta_V_pred, Delta_PA_pred)
+            V_avg = 0.5*(V + V_pred)
+            PA_avg = 0.5*(PA + PA_pred)
+            Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
+            # Corrected values
+            Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
+            PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_V, Delta_PA)
+            total_iterations += 1
+            iterations += 1
+            if self.solve_method == 'hhl':
+                # Compare HHL with Classical Method
+                print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PA_classic - Delta_PA), "\n")
+                print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_V_classic - Delta_V), "\n")
+        self._load_values(data, olddata, V_new, PA_new)
 
+        # Print Data
+        print("\nTotal nmber of iterations: ", total_iterations)
+        print("Iterations since last limit check failure: ", iterations)
+        print("\nOld Voltages:\n", olddata.buses[:,3])
+        print("\nNew Voltages:\n", data.buses[:,3])    
+        print("\nOld Phase Angles:\n", olddata.buses[:,4])
+        print("\nNew Phase Angles:\n", data.buses[:,4])
+        print("\nOld Bus Values:\n", olddata.buses, "\n")
+        print("New Bus Values (after NR):\n", data.buses, "\n")
+        print("Old Gen Values:\n", olddata.gens, "\n")
+        print("New Gen Values (after NR):\n", data.gens, "\n")
+
+        # Return new data with updated values
+        return data
+                
     def _load_powerdata(self, data:PowerData):
-        self.P = np.zeros(0)
-        self.Q = np.zeros(0)
-        self.V = np.zeros(0)
-        self.PA = np.zeros(0)
-        self.Q_min = np.zeros(0)
-        self.Q_max = np.zeros(0)
+        P = np.zeros(0)
+        Q = np.zeros(0)
+        V = np.zeros(0)
+        PA = np.zeros(0)
+        Q_min = np.zeros(0)
+        Q_max = np.zeros(0)
         
         for b in data.buses:
-            np.append(self.PA, b[4])
+            # Add PA value from bus
+            PA = np.append(PA, b[4])
             # Check if bus is PQ or not
             if b[5] != 3:
                 # Check if a generator is attatched to the bus
@@ -229,95 +271,103 @@ class NRPF:
                 if has_gen.any():
                     bus_gen = data.gens[has_gen]
                     # Add generator value for bus as its voltage magnitude
-                    self.V = np.append(self.V, bus_gen[0][3])
+                    V = np.append(V, bus_gen[0][3])
                     # Add P and Q values
                     if b[5] == 2:
-                        self.P = np.append(self.P, bus_gen[0][1])
-                        self.Q = np.append(self.Q, bus_gen[0][2])
-                        self.Q_min = np.append(self.Q_min, bus_gen[0][4])
-                        self.Q_max = np.append(self.Q_max, bus_gen[0][5])
+                        P = np.append(P, bus_gen[0][1])
+                        Q = np.append(Q, bus_gen[0][2])
+                        Q_min = np.append(Q_min, bus_gen[0][4])
+                        Q_max = np.append(Q_max, bus_gen[0][5])
                     else:
-                        self.P = np.append(self.P, -b[1])
-                        self.Q = np.append(self.Q, -b[2])
-                        self.Q_min = np.append(self.Q_min, 0)
-                        self.Q_max = np.append(self.Q_max, 0)
+                        P = np.append(P, -b[1])
+                        Q = np.append(Q, -b[2])
+                        Q_min = np.append(Q_min, 0)
+                        Q_max = np.append(Q_max, 0)
                 else:
                     raise Exception('All Slack and PV buses must have a gen! At least one gen missing.')
             else:
                 # Add P, Q, and V values from bus
-                self.P = np.append(self.P, -b[1])
-                self.Q = np.append(self.Q, -b[2])
-                self.V = np.append(self.V, b[3])
-                self.Q_min = np.append(self.Q_min, 0)
-                self.Q_max = np.append(self.Q_max, 0)
-            # Add PA value from bus
-            self.PA = np.append(self.PA, b[4])
+                P = np.append(P, -b[1])
+                Q = np.append(Q, -b[2])
+                V = np.append(V, b[3])
+                Q_min = np.append(Q_min, 0)
+                Q_max = np.append(Q_max, 0)
+
+        return P, Q, V, PA, Q_min, Q_max
 
     def _create_GA_LA(self, data:PowerData):
         # Line Admittance Matrix
-        self.LA = np.zeros((data.buses.shape[0], data.buses.shape[0]), dtype = complex)
+        LA = np.zeros((data.buses.shape[0], data.buses.shape[0]), dtype = complex)
         for b in data.branches:
             # Branch b[0] and b[1] contain fbus and tbus information
             i = int(b[0].real)-1
             j = int(b[1].real)-1
             # Set LA for both buses to 1/branch
-            self.LA[i][j] = 1/b[2]
-            self.LA[j][i] = 1/b[2]
+            LA[i][j] = 1/b[2]
+            LA[j][i] = 1/b[2]
 
         # Compute Generator Admittance
-        self.GA = np.zeros(data.buses.shape[0])
+        GA = np.zeros(data.buses.shape[0])
 
-    def _create_Ybus(self, data:PowerData):
-        self.Y = np.zeros((data.buses.shape[0], data.buses.shape[0]),  dtype = complex)
-        for i in range(self.Y.shape[0]):
-            self.Y[i][i] = self.Y[i][i] + self.GA[i]
-            for j in range (self.Y.shape[1]):
+        return GA, LA
+
+    def _create_Ybus(self, data:PowerData, GA, LA):
+        Y = np.zeros((data.buses.shape[0], data.buses.shape[0]),  dtype = complex)
+        for i in range(Y.shape[0]):
+            Y[i][i] = Y[i][i] + GA[i]
+            for j in range (Y.shape[1]):
                 if i != j:
-                    self.Y[i, j] = self.Y[i, j] - self.LA[i][j]
-                    self.Y[i, i] = self.Y[i, i] + self.LA[i][j]
+                    Y[i, j] = Y[i, j] - LA[i][j]
+                    Y[i, i] = Y[i, i] + LA[i][j]
                     
-        self.G = self.Y.real
-        self.B = self.Y.imag
+        G = Y.real
+        B = Y.imag
 
-    def _init_unknown(self):
+        return Y, G, B
+
+    def _init_unknown(self, V):
         # Flat start for bus voltages
         # Unknown values for bus volage will be set to 1
-        for i in range(self.V.size):
-            if self.V[i] == 0:
-                self.V[i] = 1
+        for i in range(V.size):
+            if V[i] == 0:
+                V[i] = 1
 
-    def _compute_powers(self, data:PowerData):
-        self.P_new = np.zeros(data.buses.shape[0])
-        self.Q_new = np.zeros(data.buses.shape[0])
+    def _compute_powers(self, data:PowerData, V, PA, G, B):
+        P_new = np.zeros(data.buses.shape[0])
+        Q_new = np.zeros(data.buses.shape[0])
         # We don't need to calculate for the slack bus (the first bus), so we start at the second bus
         for i in range(1, data.buses.shape[0]):
             for j in range (data.buses.shape[0]):
-                self.P_new[i] = self.P_new[i]+self.V[i]*self.V[j]*(self.G[i][j]*np.cos(self.PA[i]-self.PA[j])+self.B[i][j]*np.sin(self.PA[i]-self.PA[j]))
-                self.Q_new[i] = self.Q_new[i]+self.V[i]*self.V[j]*(self.G[i][j]*np.sin(self.PA[i]-self.PA[j])-self.B[i][j]*np.cos(self.PA[i]-self.PA[j]))
+                P_new[i] = P_new[i]+V[i]*V[j]*(G[i][j]*np.cos(PA[i]-PA[j])+B[i][j]*np.sin(PA[i]-PA[j]))
+                Q_new[i] = Q_new[i]+V[i]*V[j]*(G[i][j]*np.sin(PA[i]-PA[j])-B[i][j]*np.cos(PA[i]-PA[j]))
 
-    def _check_limits(self, data:PowerData):
+        return P_new, Q_new
+
+    def _check_limits(self, data:PowerData, V, Q_new, Q_min, Q_max):
         for i in range(1, data.buses.shape[0]):
             if data.buses[i][5] == 2:
                 # Check that Q for gen i is within limits
-                if (self.Q_new[i] > self.Q_max[i]) or (self.Q_new[i] < self.Q_min[i]):
+                if (Q_new[i] > Q_max[i]) or (Q_new[i] < Q_min[i]):
                     # Treat bus as PQ
                     data.buses[i][5] = 3
                     # Set bus's V to initial value
                     data.buses[i][3] = 1
-                    self.V[i] = 1
+                    V[i] = 1
                     return False
         # If the for loop is able to complete, all limit checks pass
         return True
     
-    def _compute_power_mismatches(self, data:PowerData):
-        self.Delta_P = np.zeros(0)
-        self.Delta_Q = np.zeros(0)
+    def _compute_power_mismatches(self, data:PowerData, P, Q, P_new, Q_new):
+        Delta_P = np.zeros(0)
+        Delta_Q = np.zeros(0)
         for i in range(1, data.buses.shape[0]):
-            self.Delta_P = np.append(self.Delta_P, self.P[i] - self.P_new[i])
+            Delta_P = np.append(Delta_P, P[i] - P_new[i])
             if data.buses[i][5] == 3:
-                self.Delta_Q = np.append(self.Delta_Q, self.Q[i] - self.Q_new[i])
+                Delta_Q = np.append(Delta_Q, Q[i] - Q_new[i])
 
-    def _compute_Jacobian(self, data:PowerData):
+        return Delta_P, Delta_Q
+
+    def _compute_Jacobian(self, data:PowerData, V, PA, G, B, P_new, Q_new):
         H = np.zeros((data.buses.shape[0]-1, data.buses.shape[0]-1))
         N = np.zeros((data.buses.shape[0]-1, data.buses.shape[0]-1))
         J = np.zeros((data.buses.shape[0]-1, data.buses.shape[0]-1))
@@ -325,20 +375,20 @@ class NRPF:
         for i in range(1, data.buses.shape[0]):
             for j in range(1, data.buses.shape[0]):
                 if i == j:
-                    H[i-1][j-1] = -self.Q_new[i]-self.B[i][i]*(self.V[i]**2)
+                    H[i-1][j-1] = -Q_new[i]-B[i][i]*(V[i]**2)
                     # data.buses[i][7] is Bus i's BusType, 2 is PV
                     if data.buses[i][5] != 2:
-                        N[i-1][j-1] = self.P_new[i]+self.G[i][i]*(self.V[i]**2)
-                        J[i-1][j-1] = self.P_new[i]-self.G[i][i]*(self.V[i]**2)
-                        L[i-1][j-1] = self.Q_new[i]-self.B[i][i]*(self.V[i]**2)
+                        N[i-1][j-1] = P_new[i]+G[i][i]*(V[i]**2)
+                        J[i-1][j-1] = P_new[i]-G[i][i]*(V[i]**2)
+                        L[i-1][j-1] = Q_new[i]-B[i][i]*(V[i]**2)
                 else:
-                    H[i-1][j-1] = self.V[i]*self.V[j]*(self.G[i][j]*np.cos(self.PA[i]-self.PA[j])+self.B[i][j]*np.sin(self.PA[i]-self.PA[j]))
+                    H[i-1][j-1] = V[i]*V[j]*(G[i][j]*np.cos(PA[i]-PA[j])+B[i][j]*np.sin(PA[i]-PA[j]))
                     if data.buses[j][5] != 2:
-                        N[i-1][j-1] = self.V[j]*self.V[i]*(self.G[i][j]*np.sin(self.PA[i]-self.PA[j])+self.B[i][j]*np.cos(self.PA[i]-self.PA[j]))
+                        N[i-1][j-1] = V[j]*V[i]*(G[i][j]*np.sin(PA[i]-PA[j])+B[i][j]*np.cos(PA[i]-PA[j]))
                     if data.buses[i][5] != 2:
-                        J[i-1][j-1] = -self.V[i]*self.V[j]*(self.G[i][j]*np.cos(self.PA[i]-self.PA[j])+self.B[i][j]*np.sin(self.PA[i]-self.PA[j]))
+                        J[i-1][j-1] = -V[i]*V[j]*(G[i][j]*np.cos(PA[i]-PA[j])+B[i][j]*np.sin(PA[i]-PA[j]))
                     if data.buses[i][5] != 2 and data.buses[j][5] != 2:
-                        L[i-1][j-1] = self.V[j]*self.V[i]*(self.G[i][j]*np.sin(self.PA[i]-self.PA[j])-self.B[i][j]*np.cos(self.PA[i]-self.PA[j]))
+                        L[i-1][j-1] = V[j]*V[i]*(G[i][j]*np.sin(PA[i]-PA[j])-B[i][j]*np.cos(PA[i]-PA[j]))
 
         for i in reversed(range(1, data.buses.shape[0])):
             if data.buses[i][5] == 2:
@@ -350,62 +400,53 @@ class NRPF:
                 L = np.delete(L, i-1, 1)
                 L = np.delete(L, i-1, 0)
 
-        self.Jac = np.block([[H, N], [J, L]])
+        Jac = np.block([[H, N], [J, L]])
 
-    def _compute_increment(self, ep):
-        self.Delta_PQ = np.append(self.Delta_P, self.Delta_Q)
+        return Jac
+
+    def _compute_increment(self, Delta_P, Delta_Q, Jac, ep):
+        Delta_PQ = np.append(Delta_P, Delta_Q)
         if self.solve_method == 'hhl':
             hhl = hhl_helper()
-            self.Delta_PAV = hhl.run_HHL(self.Jac, self.Delta_PQ, ep)
-            self.Delta_PAV_classic = np.dot(inv(self.Jac), self.Delta_PQ)
-            self.Delta_PA_classic = self.Delta_PAV_classic[0:len(self.Delta_P)]
-            self.Delta_V_classic = self.Delta_PAV_classic[len(self.Delta_P):]
+            Delta_PAV = hhl.run_HHL(Jac, Delta_PQ, ep)
+            Delta_PAV_classic = np.dot(inv(Jac), Delta_PQ)
+            Delta_PA_classic = Delta_PAV_classic[0:len(Delta_P)]
+            Delta_V_classic = Delta_PAV_classic[len(Delta_P):]
         else:
-            self.Delta_PAV = np.dot(inv(self.Jac), self.Delta_PQ)
-        self.Delta_PA = self.Delta_PAV[0:len(self.Delta_P)]
-        self.Delta_V = self.Delta_PAV[len(self.Delta_P):]
+            Delta_PAV = np.dot(inv(Jac), Delta_PQ)
+            Delta_PA_classic = Delta_PAV[0:len(Delta_P)]
+            Delta_V_classic = Delta_PAV[len(Delta_P):]
+        Delta_PA = Delta_PAV[0:len(Delta_P)]
+        Delta_V = Delta_PAV[len(Delta_P):]
 
-    def _compute_new_PAV(self, data:PowerData):
-        self.PA_new = np.zeros(data.buses.shape[0])
-        self.V_new = np.zeros(data.buses.shape[0])
-        self.PA_new[0] = self.PA[0]
-        self.V_new[0] = self.V[0]
+        return Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic
+
+    def _compute_new_PAV(self, data:PowerData, V, PA, Delta_V, Delta_PA):
+        PA_new = np.zeros(data.buses.shape[0])
+        V_new = np.zeros(data.buses.shape[0])
+        PA_new[0] = PA[0]
+        V_new[0] = V[0]
         incr = 0
         for i in range(1, data.buses.shape[0]):
-            self.PA_new[i] = self.PA[i] + self.Delta_PA[i-1]
+            PA_new[i] = PA[i] + Delta_PA[i-1]
             if data.buses[i][5] == 3:
-                self.V_new[i] = self.V[i] + (self.Delta_V[incr])*self.V[i]
+                V_new[i] = V[i] + (Delta_V[incr])*V[i]
                 incr = incr + 1
             else:
-                self.V_new[i] = self.V[i]
+                V_new[i] = V[i]
+            
+        return PA_new, V_new
 
-    def _check_convergence(self, data:PowerData, ep):
-        convergence_PA = np.zeros(data.buses.shape[0])
-        convergence_V = np.zeros(data.buses.shape[0])
-        for i in range(data.buses.shape[0]):
-            convergence_PA[i] = abs(self.PA_new[i] - self.PA[i])
-            convergence_V[i] = abs(self.V_new[i] - self.V[i])
-        for i in range(data.buses.shape[0]):
-            if (convergence_PA[i] > ep):
-                return False
-            # data.buses[i][7] is Bus i's BusType, 3 is PQ
-            if data.buses[i][5] == 3:
-                if(convergence_V[i] > ep):
-                    return False
-        # If this line is reached, all convergence levels are <= ep
-        return True
+    def _check_convergence(self, Delta_PAV, ep):
+        if max(Delta_PAV) > ep:
+            return False
+        else:
+            return True
     
-    def _load_values(self, data:PowerData, olddata:PowerData):
+    def _load_values(self, data:PowerData, olddata:PowerData, V_new, PA_new):
         # Load calculated values into data.buses and change altered PV buses back to PV
         for i in range(data.buses.shape[0]):
-            data.buses[i][4] = self.PA_new[i]
-            data.buses[i][3] = self.V_new[i]
+            data.buses[i][4] = PA_new[i]
+            data.buses[i][3] = V_new[i]
             if (data.buses[i][5] == 3) and (olddata.buses[i][5] == 2):
                 data.buses[i][5] = 2
-
-    def _calculate_injected(self, data:PowerData):
-        # for loop temp modification
-        for i in range(1, data.buses.shape[0]):
-            if data.buses[i][5] == 2:
-                for j in range(data.buses.shape[0]):
-                    data.gens[i][2] = data.gens[i][2]+data.buses[i][3]*data.buses[j][3]*(self.G[i][j]*np.sin(data.buses[i][4]-data.buses[j][4])-self.B[i][j]*np.cos(data.buses[i][4]-data.buses[j][4]))
