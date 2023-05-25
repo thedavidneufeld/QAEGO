@@ -189,45 +189,32 @@ class NRPF:
         # Make a copy of the old data to retain its data
         data = copy.deepcopy(olddata)
         P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
+        # For first iteration, set V_avg and PA_avg equal to V and PA
+        V_avg = V
+        PA_avg = PA
         # Value calculations
         GA, LA = self._create_GA_LA(data)
         Y, G, B = self._create_Ybus(data, GA, LA)
         self._init_unknown(V)
         total_iterations = 0 # Total iterations of NR
         iterations = 0 # Iterations since limit check last failed
-        P_new, Q_new = self._compute_powers(data, V, PA, G, B)
-        # If limit check fails, treat ith PV bus as PQ bus and recompute powers
-        while(not self._check_limits(data, V, Q_new, Q_min, Q_max)):
-            iterations = 0
-            P_new, Q_new = self._compute_powers(data, V, Q_new, Q_min, Q_max)
-        Delta_P, Delta_Q = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
-        Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
-        Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
-        PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_V, Delta_PA)
-        total_iterations += 1
-        iterations += 1
-        if self.solve_method == 'hhl':
-            # Compare HHL with Classical Method
-            print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PA_classic - Delta_PA), "\n")
-            print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_V_classic - Delta_V), "\n")
-        # If convergence has been reached, skip loop
-        # Perform NR_PC method iteratively
-        while(not self._check_convergence(Delta_PAV, ep)):
-            V = V_new
-            PA = PA_new
+        # Perform NR method iteratively
+        # Stop condition handled within the loop
+        while(True):
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
             # If limit check fails, treat ith PV bus as PQ bus and recompute powers
             while(not self._check_limits(data, V, Q_new, Q_min, Q_max)):
                 iterations = 0
                 P_new, Q_new = self._compute_powers(data)
             Delta_P, Delta_Q = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
-            # Predicted values
-            Delta_PAV_pred, Delta_PA_pred, Delta_V_pred, x, y = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
-            PA_pred, V_pred = self._compute_new_PAV(data, V, PA, Delta_V_pred, Delta_PA_pred)
-            V_avg = 0.5*(V + V_pred)
-            PA_avg = 0.5*(PA + PA_pred)
-            Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
+            if total_iterations > 0:
+                # Predicted values
+                Delta_PAV_pred, Delta_PA_pred, Delta_V_pred, x, y = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
+                PA_pred, V_pred = self._compute_new_PAV(data, V, PA, Delta_V_pred, Delta_PA_pred)
+                V_avg = 0.5*(V + V_pred)
+                PA_avg = 0.5*(PA + PA_pred)
             # Corrected values
+            Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
             Delta_PAV, Delta_PA, Delta_V, Delta_PA_classic, Delta_V_classic = self._compute_increment(Delta_P, Delta_Q, Jac, ep)
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_V, Delta_PA)
             total_iterations += 1
@@ -236,6 +223,11 @@ class NRPF:
                 # Compare HHL with Classical Method
                 print("Delta_PA difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PA_classic - Delta_PA), "\n")
                 print("Delta_V difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_V_classic - Delta_V), "\n")
+            # If convergence has been reached, exit loop
+            if self._check_convergence(Delta_PAV, ep):
+                break
+            V = V_new
+            PA = PA_new
         self._load_values(data, olddata, V_new, PA_new)
 
         # Print Data
