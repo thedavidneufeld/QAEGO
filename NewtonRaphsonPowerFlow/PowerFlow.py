@@ -6,6 +6,8 @@
 import copy
 import numpy as np
 from numpy.linalg import inv
+from math import pi
+import pandapower.converter as pc
 from HHL_conversion import hhl_helper
 
 
@@ -120,6 +122,36 @@ class PowerData:
             if not in_branches.all():
                 self.branches = self.branches[in_branches]
     
+    def loadcasedata(self, casefile):
+        # Remove any data that may exist already
+        self.__init__()
+        # Load case data from file
+        case = pc.from_mpc(casefile)
+        case = pc.to_mpc(case, init='flat')['mpc']
+        # Extract needed data from case
+        baseMVA = case['baseMVA']
+        bus = case['bus']
+        gen = case['gen']
+        branch = case['branch']
+        # Load case data 
+        for b in bus:
+            # In our algorithm, slack is 1 and PQ is 3
+            # In MatPower, slack is 3 and PQ is 1
+            if b[1] == 3:
+                btype = 1
+            elif b[1] == 1:
+                btype = 3
+            else:
+                btype = b[1]
+            # Add bus based on data from case file
+            self.addBus(b[0], b[2]/baseMVA, b[3]/baseMVA, b[7], b[8]*pi/180, btype)
+        for g in gen:
+            # Add gen based on data from case file
+            self.addGen(g[0].real, g[1].real/baseMVA, g[2].real/baseMVA, g[5].real, g[4].real/baseMVA, g[3].real/baseMVA)
+        for b in branch:
+            # Add branch based on data from case file
+            self.addBranch(b[0], b[1], complex(b[2], b[3]))
+    
 
 # Class for solving power flow using Newton-Raphson method
 class NRPF:
@@ -141,6 +173,8 @@ class NRPF:
         P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
         V0 = V
         PA0 = PA
+        # Convert PA to radians for calculations
+        PA = (pi/180)*PA
         # Value calculations
         LA = self._calculate_LA(data)
         Y, G, B = self._create_Ybus(data, LA)
@@ -149,7 +183,7 @@ class NRPF:
         iterations = 0 # Iterations since limit check last failed
         # Perform NR method iteratively
         # Stop condition handled within the loop
-        while(True):
+        while(total_iterations < 50):
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
             # If limit check fails, treat ith PV bus as PQ bus and recompute powers
             while(not self._check_limits(data, Q_new, Q_min, Q_max)):
@@ -171,6 +205,8 @@ class NRPF:
                 break
             V = V_new
             PA = PA_new
+        # Convert PA back to degrees
+        PA_new = (180/pi)*PA_new
         self._load_values(data, olddata, V_new, PA_new)
 
         # Print Data
@@ -203,7 +239,7 @@ class NRPF:
         iterations = 0 # Iterations since limit check last failed
         # Perform NR method iteratively
         # Stop condition handled within the loop
-        while(True):
+        while(total_iterations < 50):
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
             # If limit check fails, treat ith PV bus as PQ bus and recompute powers
             while(not self._check_limits(data, Q_new, Q_min, Q_max)):
@@ -372,13 +408,14 @@ class NRPF:
                         J[i-1][j-1] = P_new[i]-G[i][i]*(V[i]**2)
                         L[i-1][j-1] = Q_new[i]-B[i][i]*(V[i]**2)
                 else:
-                    H[i-1][j-1] = V[i]*V[j]*(G[i][j]*np.cos(PA[i]-PA[j])+B[i][j]*np.sin(PA[i]-PA[j]))
+                    I = complex(V[j], PA[j])*complex(G[i][j], B[i][j])
+                    H[i-1][j-1] = I.real*PA[i]-I.imag*V[i]
                     if data.buses[j][5] != 2:
-                        N[i-1][j-1] = V[j]*V[i]*(G[i][j]*np.sin(PA[i]-PA[j])+B[i][j]*np.cos(PA[i]-PA[j]))
+                        N[i-1][j-1] = I.real*V[i]+I.imag*PA[i]
                     if data.buses[i][5] != 2:
-                        J[i-1][j-1] = -V[i]*V[j]*(G[i][j]*np.cos(PA[i]-PA[j])+B[i][j]*np.sin(PA[i]-PA[j]))
+                        J[i-1][j-1] = -(I.real*V[i]+I.imag*PA[i])
                     if data.buses[i][5] != 2 and data.buses[j][5] != 2:
-                        L[i-1][j-1] = V[j]*V[i]*(G[i][j]*np.sin(PA[i]-PA[j])-B[i][j]*np.cos(PA[i]-PA[j]))
+                        L[i-1][j-1] = H[i-1][j-1]
 
         for i in reversed(range(1, data.buses.shape[0])):
             if data.buses[i][5] == 2:
@@ -391,7 +428,6 @@ class NRPF:
                 L = np.delete(L, i-1, 0)
 
         Jac = np.block([[H, N], [J, L]])
-
         return Jac
 
     def _compute_increment(self, Delta_PQ, Jac, ep):
@@ -423,7 +459,7 @@ class NRPF:
         return PA_new, V_new
 
     def _check_convergence(self, Delta_PAV, ep):
-        if max(Delta_PAV) > ep:
+        if max(abs(Delta_PAV)) > ep:
             return False
         else:
             return True
