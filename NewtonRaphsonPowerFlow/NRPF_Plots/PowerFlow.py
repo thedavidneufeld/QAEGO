@@ -178,6 +178,8 @@ class NRPF:
         # Value calculations
         LA = self._calculate_LA(data)
         Y, G, B = self._create_Ybus(data, LA)
+        PAVs = np.empty((0, PA.size+V.size))
+        PAVs = np.vstack((PAVs, np.append(PA, V)))
         self._init_unknown(data, V, PA)
         total_iterations = 0 # Total iterations of NR
         iterations = 0 # Iterations since limit check last failed
@@ -195,6 +197,7 @@ class NRPF:
             Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
+            PAVs = np.vstack((PAVs, np.append(PA_new, V_new)))
             total_iterations += 1
             iterations += 1
             if self.solve_method == 'hhl':
@@ -220,7 +223,7 @@ class NRPF:
         print("New Bus Values (after NR):\n", data.buses, "\n")
 
         # Return new data with updated values
-        return data
+        return data, PAVs
     
     def NR_PC(self, olddata:PowerData, ep):
         # Make a copy of the old data to retain its data
@@ -236,6 +239,8 @@ class NRPF:
         # Value calculations
         LA = self._calculate_LA(data)
         Y, G, B = self._create_Ybus(data, LA)
+        PAVs = np.empty((0, PA.size+V.size))
+        PAVs = np.vstack((PAVs, np.append(PA, V)))
         self._init_unknown(data, V, PA)
         total_iterations = 0 # Total iterations of NR
         iterations = 0 # Iterations since limit check last failed
@@ -260,6 +265,7 @@ class NRPF:
             Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
+            PAVs = np.vstack((PAVs, np.append(PA_new, V_new)))
             total_iterations += 1
             iterations += 1
             if self.solve_method == 'hhl':
@@ -285,7 +291,7 @@ class NRPF:
         print("New Bus Values (after NR):\n", data.buses, "\n")
 
         # Return new data with updated values
-        return data
+        return data, PAVs
                 
     def _load_powerdata(self, data:PowerData):
         P = np.zeros(0)
