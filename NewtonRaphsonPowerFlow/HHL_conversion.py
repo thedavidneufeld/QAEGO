@@ -13,22 +13,6 @@ from qiskit import Aer
 from qiskit.quantum_info import Statevector
 
 class hhl_helper:
-
-    def _make_nxn(self, matrix, vector):
-        if matrix.shape[0] != matrix.shape[1]:
-            # set n to the highest value between the rows and columns of matrix
-            # by doing this, we can ensure that the matrix will be nxn and the vector will be nx1
-            n = max(matrix.shape[0], matrix.shape[1])
-            matrix = np.pad(matrix, ((0, n-matrix.shape[0]), (0, n-matrix.shape[1])), 'constant', constant_values = (0))
-            vector.resize(1, n, refcheck=False)
-            # create a matrix (lambda) that contains a small value to add to the matrix and vector
-            # this will ensure that the matrix is invertible and still close in value to the original
-            la = np.empty(n)
-            la.fill(10**-6)
-            la_mat = np.diag(la)
-            matrix = matrix + la_mat
-            vector = vector + la
-        return matrix, vector
     
     def _make_2nx2n(self, matrix, vector):
         # this function assumes that the matrix is square
@@ -57,7 +41,6 @@ class hhl_helper:
     def _hhl_compatible(self, matrix, vector):
         mat = matrix.copy()
         vec = vector.copy()
-        mat, vec = self._make_nxn(mat,vec)
         mat, vec = self._make_2nx2n(mat, vec)
         mat, vec = self._make_hermitian(mat, vec)
         return mat, vec
@@ -71,7 +54,7 @@ class hhl_helper:
         mat, vec = self._hhl_compatible(matrix, vector)
         solution = self.hhl.solve(mat, vec)
         sv = Statevector(solution.state)
-        data_start = int(sv.data.size / 2)
+        data_start = sv.data.size // 2
         data_end = data_start + vec.size
         sv_data = sv.data[data_start:data_end].real
         solution_norm = solution.euclidean_norm
