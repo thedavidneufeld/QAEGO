@@ -179,27 +179,19 @@ class NRPF:
         LA = self._calculate_LA(data)
         Y, G, B = self._create_Ybus(data, LA)
         self._init_unknown(data, V, PA)
-        total_iterations = 0 # Total iterations of NR
-        iterations = 0 # Iterations since limit check last failed
+        iterations = 0 # Total iterations
         # Perform NR method iteratively
         # Stop condition handled within the loop
-        while(total_iterations < 50):
+        while(iterations < 50):
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
-            # If limit check fails, treat ith PV bus as PQ bus and recompute powers
-            while(not self._check_limits(data, Q_new, Q_min, Q_max)):
-                iterations = 0
-                P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
-                self._init_unknown(data, V, PA)
-                P_new, Q_new = self._compute_powers(data, V, PA, G, B)
             Delta_PQ = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
             Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
-            total_iterations += 1
             iterations += 1
             if self.solve_method == 'hhl':
                 # Compare HHL with Classical Method
-                print("Delta_PAV difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
+                print("Delta_PAV difference at iteration ", iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
@@ -210,8 +202,7 @@ class NRPF:
         self._load_values(data, olddata, V_new, PA_new)
 
         # Print Data
-        print("\nTotal nmber of iterations: ", total_iterations)
-        print("Iterations since last limit check failure: ", iterations)
+        print("\nTotal nmber of iterations: ", iterations)
         print("\nOld Voltages:\n", V0)
         print("\nNew Voltages:\n", V_new)    
         print("\nOld Phase Angles:\n", PA0)
@@ -237,18 +228,11 @@ class NRPF:
         LA = self._calculate_LA(data)
         Y, G, B = self._create_Ybus(data, LA)
         self._init_unknown(data, V, PA)
-        total_iterations = 0 # Total iterations of NR
-        iterations = 0 # Iterations since limit check last failed
+        iterations = 0 # Total iterations
         # Perform NR method iteratively
         # Stop condition handled within the loop
-        while(total_iterations < 50):
+        while(iterations < 50):
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
-            # If limit check fails, treat ith PV bus as PQ bus and recompute powers
-            while(not self._check_limits(data, Q_new, Q_min, Q_max)):
-                iterations = 0
-                P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
-                self._init_unknown(data, V, PA)
-                P_new, Q_new = self._compute_powers(data)
             Delta_PQ = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
             if iterations > 0:
                 # Predicted values
@@ -260,11 +244,10 @@ class NRPF:
             Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
-            total_iterations += 1
             iterations += 1
             if self.solve_method == 'hhl':
                 # Compare HHL with Classical Method
-                print("Delta_PAV difference at iteration ", total_iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
+                print("Delta_PAV difference at iteration ", iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
@@ -275,8 +258,7 @@ class NRPF:
         self._load_values(data, olddata, V_new, PA_new)
 
         # Print Data
-        print("\nTotal nmber of iterations: ", total_iterations)
-        print("Iterations since last limit check failure: ", iterations)
+        print("\nTotal nmber of iterations: ", iterations)
         print("\nOld Voltages:\n", V0)
         print("\nNew Voltages:\n", V_new)    
         print("\nOld Phase Angles:\n", PA0)
