@@ -171,8 +171,9 @@ class NRPF:
         # Make a copy of the old data to retain its data
         data = copy.deepcopy(olddata)
         P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
-        V0 = V
-        PA0 = PA
+        V_history = V
+        PA_history = PA
+        Delta_PAV_diff = np.empty(0)
         # Convert PA to radians for calculations
         PA = (pi/180)*PA
         # Value calculations
@@ -187,38 +188,41 @@ class NRPF:
             Delta_PQ = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
             Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
+            Delta_PAV_diff = np.append(Delta_PAV_diff, np.linalg.norm(Delta_PAV_classic - Delta_PAV))
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
             iterations += 1
             if self.solve_method == 'hhl':
                 # Compare HHL with Classical Method
-                print("Delta_PAV difference at iteration ", iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
+                print("Delta_PAV difference at iteration " + str(iterations) + ":", Delta_PAV_diff[iterations-1], "\n")
+            V = V_new
+            V_history = np.vstack((V_history, V))
+            PA = PA_new
+            PA_history = np.vstack((PA_history, PA))
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
-            V = V_new
-            PA = PA_new
         # Convert PA back to degrees
         PA_new = (180/pi)*PA_new
         self._load_values(data, olddata, V_new, PA_new)
 
-        # Print Data
-        print("\nTotal nmber of iterations: ", iterations)
-        print("\nOld Voltages:\n", V0)
-        print("\nNew Voltages:\n", V_new)    
-        print("\nOld Phase Angles:\n", PA0)
-        print("\nNew Phase Angles:\n", PA_new)
-        print("\nOld Bus Values:\n", olddata.buses, "\n")
-        print("New Bus Values (after NR):\n", data.buses, "\n")
+        info = {
+            "iterations":iterations,
+            "voltages":V_history,
+            "phase_angles":PA_history,
+            "dpav_difference":Delta_PAV_diff,
+            "powerdata":data
+        }
 
-        # Return new data with updated values
-        return data
+        # Return info dict
+        return info
     
     def NR_PC(self, olddata:PowerData, ep):
         # Make a copy of the old data to retain its data
         data = copy.deepcopy(olddata)
         P, Q, V, PA, Q_min, Q_max = self._load_powerdata(data)
-        V0 = V
-        PA0 = PA
+        V_history = V
+        PA_history = PA
+        Delta_PAV_diff = np.empty(0)
         # Convert PA to radians for calculations
         PA = (pi/180)*PA
         # For first iteration, set V_avg and PA_avg equal to V and PA
@@ -243,31 +247,33 @@ class NRPF:
             # Corrected values
             Jac = self._compute_Jacobian(data, V_avg, PA_avg, G, B, P_new, Q_new)
             Delta_PAV, Delta_PAV_classic = self._compute_increment(Delta_PQ, Jac, ep)
+            Delta_PAV_diff = np.append(Delta_PAV_diff, np.linalg.norm(Delta_PAV_classic - Delta_PAV))
             PA_new, V_new = self._compute_new_PAV(data, V, PA, Delta_PAV)
             iterations += 1
             if self.solve_method == 'hhl':
                 # Compare HHL with Classical Method
-                print("Delta_PAV difference at iteration ", iterations, ":\n", np.linalg.norm(Delta_PAV_classic - Delta_PAV), "\n")
+                print("Delta_PAV difference at iteration " + str(iterations) + ":", Delta_PAV_diff[iterations-1], "\n")
+            V = V_new
+            V_history = np.vstack((V_history, V))
+            PA = PA_new
+            PA_history = np.vstack((PA_history, PA))
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
-            V = V_new
-            PA = PA_new
         # Convert PA back to degrees
         PA_new = (180/pi)*PA_new
         self._load_values(data, olddata, V_new, PA_new)
 
-        # Print Data
-        print("\nTotal nmber of iterations: ", iterations)
-        print("\nOld Voltages:\n", V0)
-        print("\nNew Voltages:\n", V_new)    
-        print("\nOld Phase Angles:\n", PA0)
-        print("\nNew Phase Angles:\n", PA_new)
-        print("\nOld Bus Values:\n", olddata.buses, "\n")
-        print("New Bus Values (after NR):\n", data.buses, "\n")
+        info = {
+            "iterations":iterations,
+            "voltages":V_history,
+            "phase_angles":PA_history,
+            "dpav_difference":Delta_PAV_diff,
+            "powerdata":data
+        }
 
-        # Return new data with updated values
-        return data
+        # Return info dict
+        return info
                 
     def _load_powerdata(self, data:PowerData):
         P = np.zeros(0)
