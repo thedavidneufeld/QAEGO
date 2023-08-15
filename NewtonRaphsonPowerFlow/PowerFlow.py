@@ -197,7 +197,7 @@ class NRPF:
             V = V_new
             V_history = np.vstack((V_history, V))
             PA = PA_new
-            PA_history = np.vstack((PA_history, PA))
+            PA_history = np.vstack((PA_history, (180/pi)*PA))
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
@@ -256,7 +256,7 @@ class NRPF:
             V = V_new
             V_history = np.vstack((V_history, V))
             PA = PA_new
-            PA_history = np.vstack((PA_history, PA))
+            PA_history = np.vstack((PA_history, (180/pi)*PA))
             # If convergence has been reached, exit loop
             if self._check_convergence(Delta_PAV, ep):
                 break
