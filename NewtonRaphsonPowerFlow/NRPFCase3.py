@@ -1,6 +1,7 @@
 from PowerFlow import PowerData, NRPF
 import matplotlib.pyplot as plt
 from pathlib import Path
+import time
 
 def main():
     # Set directory
@@ -21,8 +22,16 @@ def main():
     # Initialize HHL solver
     pf_hhl = NRPF('hhl')
 
+    # Start timing Classical solve
+    st_cl = time.time()
+
     # Solve Classically
     c3_pf = pf.NR(case3, 1e-8)
+
+    # Stop timing Classical solve and output time
+    et_cl = time.time()
+    cl_time = et_cl - st_cl
+    print('Time to solve (Classical):', cl_time, 'seconds\n')
 
     # Print Results
     print('Newton Raphson Solution:\n')
@@ -37,8 +46,16 @@ def main():
     plt.savefig("c3_pf_dpav_difference.png")
     plt.clf()
 
+    # Start timing HHL solve
+    st_hhl = time.time()
+
     # Solve with HHL
     c3_hhl = pf_hhl.NR(case3, 1e-8)
+
+    # Stop timing HHL solve and output time
+    et_hhl = time.time()
+    hhl_time = et_hhl - st_hhl
+    print('Time to solve (HHL):', hhl_time, 'seconds\n')
 
     # Print Results
     print('Newton Raphson with HHL Solution:\n')

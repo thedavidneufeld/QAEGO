@@ -1,10 +1,6 @@
 /home/dneufeld/scratch/NRPFC3
-gra637
-Tue Aug  8 18:28:27 EDT 2023
-
-The following have been reloaded with a version change:
-  1) python/3.10.2 => python/3.9.6
-
+gra768
+Tue Aug 15 17:58:57 EDT 2023
 Running...
 Case 3:
 
@@ -22,6 +18,8 @@ Branches
  [1.   +0.j  3.   +0.j  0.025+0.1j]
  [2.   +0.j  3.   +0.j  0.025+0.1j]] 
 
+Time to solve (Classical): 0.002844095230102539 seconds
+
 Newton Raphson Solution:
 
 Iteration 0:
@@ -29,16 +27,16 @@ Iteration 0:
     Phase Angles: [0. 0. 0.]
 Iteration 1:
     Voltages: [1.02       1.03       0.99102564]
-    Phase Angles: [ 0.          0.05495226 -0.02117033]
+    Phase Angles: [ 0.          3.1485323  -1.21297057]
 Iteration 2:
     Voltages: [1.02       1.03       0.98926325]
-    Phase Angles: [ 0.          0.05417029 -0.02213041]
+    Phase Angles: [ 0.          3.10372919 -1.267979  ]
 Iteration 3:
     Voltages: [1.02       1.03       0.98926028]
-    Phase Angles: [ 0.          0.05417274 -0.02212965]
+    Phase Angles: [ 0.          3.10386913 -1.26793577]
 Iteration 4:
     Voltages: [1.02       1.03       0.98926027]
-    Phase Angles: [ 0.          0.05417274 -0.02212966]
+    Phase Angles: [ 0.          3.10386918 -1.26793587]
 
 
 Delta_PAV difference at iteration 1: 0.0036156327861802937 
@@ -55,6 +53,8 @@ Delta_PAV difference at iteration 6: 9.878394606355388e-09
 
 Delta_PAV difference at iteration 7: 7.580714469359215e-10 
 
+Time to solve (HHL): 193.90691328048706 seconds
+
 Newton Raphson with HHL Solution:
 
 Iteration 0:
@@ -62,25 +62,25 @@ Iteration 0:
     Phase Angles: [0. 0. 0.]
 Iteration 1:
     Voltages: [1.02       1.03       0.99135843]
-    Phase Angles: [ 0.          0.05217563 -0.01887852]
+    Phase Angles: [ 0.          2.98944347 -1.08165928]
 Iteration 2:
     Voltages: [1.02       1.03       0.98929856]
-    Phase Angles: [ 0.          0.05398555 -0.02191082]
+    Phase Angles: [ 0.          3.09314422 -1.25539755]
 Iteration 3:
     Voltages: [1.02       1.03       0.98926045]
-    Phase Angles: [ 0.          0.05415745 -0.02211382]
+    Phase Angles: [ 0.          3.10299349 -1.26702833]
 Iteration 4:
     Voltages: [1.02       1.03       0.98926026]
-    Phase Angles: [ 0.          0.05417155 -0.02212846]
+    Phase Angles: [ 0.          3.10380109 -1.26786714]
 Iteration 5:
     Voltages: [1.02       1.03       0.98926027]
-    Phase Angles: [ 0.          0.05417265 -0.02212956]
+    Phase Angles: [ 0.          3.10386394 -1.26793061]
 Iteration 6:
     Voltages: [1.02       1.03       0.98926027]
-    Phase Angles: [ 0.          0.05417273 -0.02212965]
+    Phase Angles: [ 0.          3.10386878 -1.26793546]
 Iteration 7:
     Voltages: [1.02       1.03       0.98926027]
-    Phase Angles: [ 0.          0.05417274 -0.02212966]
+    Phase Angles: [ 0.          3.10386915 -1.26793584]
 
 
-Tue Aug  8 18:31:39 EDT 2023
+Tue Aug 15 18:02:48 EDT 2023
