@@ -239,12 +239,11 @@ class NRPF:
             P_new, Q_new = self._compute_powers(data, V, PA, G, B)
             Delta_PQ = self._compute_power_mismatches(data, P, Q, P_new, Q_new)
             # Initialize additive preconditioner
-            if iterations == 0:
-                U = np.random.rand(Delta_PQ.size, Delta_PQ.size)
-                U = U/np.linalg.norm(U)
-                Y = np.random.rand(Delta_PQ.size, Delta_PQ.size)
-                Y = Y/np.linalg.norm(Y)
-                APP = np.dot(U, Y.T)
+            U = Delta_PQ[:, np.newaxis]
+            U = U/np.linalg.norm(U)
+            Y = np.random.rand(Delta_PQ.size, 1)
+            Y = Y/np.linalg.norm(Y)
+            APP = np.dot(U, Y.T)
             Jac = self._compute_Jacobian(data, V, PA, G, B, P_new, Q_new) + APP
             Jac_cond = np.linalg.cond(Jac)
             print("Condition number of Jac in iteration " + str(iterations+1) + ":", Jac_cond)
